@@ -9,12 +9,12 @@
 #     mats.lintonsson@ericsson.com
 #
 # Todo:
-#     - Read from config file (containing the diff tool setting).
+#     N/A
 #
 # History
 #     2014-12-01  ervmali  First version.
 #     2014-12-02  ervmali  Introduced the UNCOMMITTED functionality.
-#     2014-12-03  ervmali  Added sub trimString.
+#     2014-12-03  ervmali  Added the configuration file functionality.
 #
 ################################################################################
 
@@ -87,23 +87,53 @@ sub trimString
 
 print("\n");
 
-# global definitions (user allowed to modify)
-
-my $diffTool = "tcsh -c 'vim -d FILE_REF FILE_SEC'";  # during runtime FILE_REF and FILE_SEC will be replaced automatically by real filenames
-my $tmpStorage = "/tmp/";
-
-# other global definitions (user NOT allowed to modify)
+# global definitions
 
 my $commitRef = "";  # reference commit
 my $commitSec = "";  # secondary commit
 my @commitRefFiles;  # a list of all modified files found in $commitRef
 
-my $repoRoot = `git rev-parse --show-toplevel`;  # Git repository root directory
+my $repoRoot = `git rev-parse --show-toplevel`;  # Git repository root directory  # TODO: Add fault handling for this operation.
 $repoRoot = trimString($repoRoot);
 $repoRoot = "${repoRoot}/";
 
 my $user = `whoami`;  # user-id
 $user = trimString($user);
+
+my $homePath = `echo ~${user}`;  # user's home directory path
+$homePath = trimString($homePath);
+
+my $configFile = "${homePath}/.git_diff_config";  # path and filename of configuration file
+
+# global definitions that are configurable via the .git_diff_config configuration file
+
+my $diffTool = "vim -d FILE_REF FILE_SEC";  # during runtime FILE_REF and FILE_SEC will be replaced automatically by real filenames
+my $tmpStorage = "/tmp/";
+
+# read config file (it it exists)
+
+if(-e ${configFile})
+{
+  # configuration file found; read it and set parameters accordingly
+
+  open(INFILE, "${configFile}" ) or die ( "ERROR! Couldn't open ${configFile}: $!");
+
+  while(<INFILE>)  # get one line at the time from the configuration file
+  {
+    # $_ now contains one line from INFILE
+
+    if( /^\s*diffTool\s*=\s*(.*)$/ )  # reading the diffTool parameter
+    {
+      $diffTool = trimString($1);
+    }
+    elsif(/^\s*tmpStorage\s*=\s*(.*)$/)  # reading the tmpStorage parameter
+    {
+      $tmpStorage = trimString($1);
+    }
+  }
+
+  close(INFILE);
+}
 
 # check arguments
 

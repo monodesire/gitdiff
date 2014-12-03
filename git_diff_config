@@ -1,0 +1,2 @@
+diffTool   = tcsh -c 'vim -d FILE_REF FILE_SEC'
+tmpStorage = /tmp/
