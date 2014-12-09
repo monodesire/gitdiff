@@ -9,12 +9,14 @@
 #     mats.lintonsson@ericsson.com
 #
 # Todo:
-#     N/A
+#     - Document how the configuration file workds.
+#     - Make it possible to use HEAD for commitSec.
 #
 # History
 #     2014-12-01  ervmali  First version.
 #     2014-12-02  ervmali  Introduced the UNCOMMITTED functionality.
 #     2014-12-03  ervmali  Added the configuration file functionality.
+#     2014-12-09  ervmali  Bug fixes.
 #
 ################################################################################
 
@@ -238,8 +240,10 @@ while( $loop == 1 )
   {
     # check that the user has given a valid number
 
-    if($stdin ge 0 and $stdin le scalar(@commitRefFiles)-1)
+    if($stdin >= 0 and $stdin <= scalar(@commitRefFiles)-1)
     {
+      my $diffToolTemp = $diffTool;
+
       # find out the name of the chosen file
 
       my $currentFilename = "UNKNOWN";
@@ -268,15 +272,19 @@ while( $loop == 1 )
 
       # start the diff tool with the two files
 
-      $diffTool =~ s/FILE_REF/${fileRef}/;
-      $diffTool =~ s/FILE_SEC/${fileSec}/;
+      $diffToolTemp =~ s/FILE_REF/${fileRef}/;
+      $diffToolTemp =~ s/FILE_SEC/${fileSec}/;
 
-      system(${diffTool});
+      system(${diffToolTemp});
 
       # remove temporary files
 
       unlink(${fileRef});
       unlink(${fileSec});
+    }
+    else
+    {
+      print("%%%%%%%%%%%\n");
     }
   }
 
