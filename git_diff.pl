@@ -8,9 +8,13 @@
 # Author
 #     mats.lintonsson@ericsson.com
 #
-# Todo:
-#     - Document how the configuration file workds.
+# Todo (highest prio in top, roughly):
 #     - Make it possible to use HEAD for commitSec.
+#     - Introduce command 'n' (next) for auto-jumping to the next file.
+#     - Document how the configuration file works.
+#
+# Dreaming:
+#     - Create a (G)UI for easy viewing and selecting commits.
 #
 # History
 #     2014-12-01  ervmali  First version.
