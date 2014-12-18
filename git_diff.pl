@@ -12,6 +12,7 @@
 #     - Make it possible to use HEAD for commitSec.
 #     - Introduce command 'n' (next) for auto-jumping to the next file.
 #     - Document how the configuration file works.
+#     - Clean TODOs.
 #
 # Dreaming:
 #     - Create a (G)UI for easy viewing and selecting commits.
@@ -285,10 +286,6 @@ while( $loop == 1 )
 
       unlink(${fileRef});
       unlink(${fileSec});
-    }
-    else
-    {
-      print("%%%%%%%%%%%\n");
     }
   }
 
