@@ -22,9 +22,13 @@
 #     2014-12-02  ervmali  Introduced the UNCOMMITTED functionality.
 #     2014-12-03  ervmali  Added the configuration file functionality.
 #     2014-12-09  ervmali  Bug fixes.
+#     2015-01-12  ervmali  Added a simple UI for picking commits to diff.
 #
 ################################################################################
 
+use FindBin;                      # where was script installed?
+use lib "$FindBin::Bin/modules";  # use a sub-dir for libs
+require Term::Screen;
 use warnings;
 use strict;
 
@@ -89,6 +93,71 @@ sub trimString
   return $returnString;
 }
 
+# ------------------------------------------------------------------------------
+# Returns a number of commits obtained from a one-line 'git log' command.
+#
+# Arguments:
+#   $_[0] = offset (from what commit to start obtain)
+#   $_[1] = number of commits to obtain
+#
+# Returns:
+#   A list of commits, delimited by a newline character.
+# ------------------------------------------------------------------------------
+sub getGitCommits
+{
+  my $offset = $_[0];
+  my $number = $_[1];
+
+  if($offset < 0)
+  {
+    $offset = 0;
+  }
+
+  if($number < 0)
+  {
+    $number = 0;
+  }
+
+  return `git log --all --skip=${offset} -${number} --graph --abbrev-commit --decorate --format=format:'%h (%cd) %s [%an]'`;
+}
+
+# ------------------------------------------------------------------------------
+# Checks if there are more Git commits to fetch (with 'git log') from a certain
+# offset.
+#
+# Arguments:
+#   $_[0] = offset (from what commit to start checking)
+#   $_[1] = number of commits to obtain
+#
+# Returns:
+#   1 if there are more commits, otherwise 0
+# ------------------------------------------------------------------------------
+sub moreGitCommits
+{
+  my $returnValue = 1;
+  my $offset = $_[0];
+  my $number = $_[1];
+
+  if($offset < 0)
+  {
+    $offset = 0;
+  }
+
+  if($number < 0)
+  {
+    $number = 0;
+  }
+
+  my @commits = `git log --all --skip=${offset} -${number} --graph --abbrev-commit --decorate --format=format:'%h (%cd) %s [%an]'`;
+
+  if(scalar(@commits) == 0)
+  {
+    $returnValue = 0;
+  }
+
+  return $returnValue;
+}
+
 
 # == main ======================================================================
 
@@ -144,13 +213,191 @@ if(-e ${configFile})
 
 # check arguments
 
-if(scalar(@ARGV) != 2)
+my $numOfArgs = scalar(@ARGV);
+
+if($numOfArgs == 1)
 {
-  print("ERROR! Faulty number of arguments.\n");
-  printHelp();
-  exit(1);
+  if($ARGV[0] =~ /^GRAPH$/)
+  {
+    # get terminal size
+
+    (my $lines, my $cols) = `stty size`=~/(\d+)\s+(\d+)/?($1,$2):(80,25);
+
+    if($lines < 10 or $cols < 80)
+    {
+      print("ERROR! Terminal too small. Not enough lines or width to run the UI.\n");
+      exit(1);
+    }
+
+    # create a screen object for the UI
+
+    my $screen = new Term::Screen;
+    $screen->clrscr();
+    $screen->noecho();
+
+    my @logLines;
+    my $offset = 0;
+    my $arrow = 0;
+    my $loop = 1;
+    my $numAvailableLines = $lines - 2;
+    my $previousRefCommitLine = -1;
+    my $previousSecCommitLine = -1;
+
+    while($loop == 1)  # loop until user breaks
+    {
+      @logLines = getGitCommits($offset, $numAvailableLines);
+
+      my $currentLine = 0;
+      foreach my $oneLogLine (@logLines)  # print a set of commits
+      {
+        $oneLogLine = trimString($oneLogLine);
+        $screen->at($currentLine,3)->puts(substr($oneLogLine, 0, $cols - 7));  # print one line
+
+        if($commitRef ne "" and $oneLogLine =~ /\*\s${commitRef}\s\(/)  # print 'R' if this commit has been marked as the reference commit
+        {
+          $screen->at($currentLine,1)->puts("R");
+        }
+
+        if($commitSec ne "" and $oneLogLine =~ /\*\s${commitSec}\s\(/)  # print 'S' if this commit has been marked as the secondary commit
+        {
+          $screen->at($currentLine,1)->puts("S");
+        }
+
+        $currentLine++;
+
+        if($currentLine >= $numAvailableLines)  # have we reached the limit of available lines?
+        {
+          last;
+        }
+      }
+
+      if($currentLine < $numAvailableLines)  # check if the commit history is shorter if the number of available lines
+      {
+        $numAvailableLines = $currentLine;
+      }
+
+      $currentLine++;
+      $screen->at($currentLine,0)->puts("Legend: [k=up] [j=down] [K=pgUp] [J=pgDown] [r=ref] [s=sec] [d=diff] [q=quit]");
+
+      WAIT_FOR_USER_INPUT:
+
+      $screen->at($arrow,0)->puts(">");
+      $screen->at($lines,$cols);  # put cursor in lower-right corner
+
+      my $key = $screen->getch();
+
+      # examine pressed key
+
+      if($key eq "q")
+      {
+        $screen->clrscr();
+        exit(0);
+      }
+      elsif($key eq "j")
+      {
+        $screen->at($arrow,0)->puts(" ");  # clear previous arrow
+        $arrow++;
+
+        if($arrow >= $numAvailableLines)
+        {
+          $arrow = $numAvailableLines - 1;
+        }
+
+        goto WAIT_FOR_USER_INPUT;  # bypass reprint of all commits
+      }
+      elsif($key eq "k")
+      {
+        $screen->at($arrow,0)->puts(" ");  # clear previous arrow
+        $arrow--;
+
+        if($arrow < 0)
+        {
+          $arrow = 0;
+        }
+
+        goto WAIT_FOR_USER_INPUT;  # bypass reprint of all commits
+      }
+      elsif($key eq "J")
+      {
+        if(moreGitCommits($offset + 10, $numAvailableLines))
+        {
+          $screen->clrscr();
+          $offset = $offset + 10;
+        }
+      }
+      elsif($key eq "K")
+      {
+        $screen->clrscr();
+        $offset = $offset - 10;
+
+        if($offset < 0)
+        {
+          $offset = 0;
+        }
+      }
+      elsif($key eq "r")
+      {
+        if($logLines[$arrow] =~ /\*\s([0-9a-z]{7})\s\(/)  # make sure the arrow line contains a commit
+        {
+          my $commitTemp = $1;
+
+          if($commitTemp ne $commitSec and $commitTemp ne $commitRef)  # only "approve" reference commit if it's not the same commit as the secondary, or itself
+          {
+            if($previousRefCommitLine != -1)
+            {
+              $screen->at($previousRefCommitLine,1)->puts(" ");  # clean old 'R'
+            }
+
+            $commitRef = $commitTemp;
+            $previousRefCommitLine = $arrow;
+          }
+        }
+      }
+      elsif($key eq "s")
+      {
+        if($logLines[$arrow] =~ /\*\s([0-9a-z]{7})\s\(/)  # make sure the arrow line contains a commit
+        {
+          my $commitTemp = $1;
+
+          if($commitTemp ne $commitRef and $commitTemp ne $commitSec)  # only "approve" secondary commit if it's not the same commit as reference, or itself
+          {
+            if($previousSecCommitLine != -1)
+            {
+              $screen->at($previousSecCommitLine,1)->puts(" ");  # clean old 'S'
+            }
+
+            $commitSec = $commitTemp;
+            $previousSecCommitLine = $arrow;
+          }
+        }
+      }
+      elsif($key eq "d")
+      {
+        $loop = 0;
+      }
+      else  # user pressed an unsupported key
+      {
+        goto WAIT_FOR_USER_INPUT;  # bypass reprint of all commits
+      }
+    }
+
+    $screen->clrscr();
+    undef $screen;
+
+    if($commitRef eq "" or $commitSec eq "")
+    {
+      print("ERROR! Cannot diff. The reference and/or secondary commits were not set.\n\n");
+      exit(1);
+    }
+  }
+  else
+  {
+    print("ERROR! Can't recognize $ARGV[0] as an argument.\n");
+    printHelp();
+    exit(1);
+  }
 }
-else
+elsif($numOfArgs == 2)
 {
   if($ARGV[0] =~ /^HEAD$/)
   {
@@ -166,6 +413,12 @@ else
   }
 
   $commitSec = $ARGV[1];
+}
+else
+{
+  print("ERROR! Faulty number of arguments.\n");
+  printHelp();
+  exit(1);
 }
 
 $commitRef = trimString($commitRef);
@@ -215,7 +468,7 @@ if(scalar(@commitRefFiles) == 0)
 my $loop = 1;
 my $stdin;
 
-while( $loop == 1 )
+while($loop == 1)
 {
   # print files that can be diffed
 
