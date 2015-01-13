@@ -3,7 +3,7 @@
 ################################################################################
 #
 # git_diff.pl
-#     Provides a simple non-graphical UI for diffing commits in Git in Linux.
+#     Provides a simple (ASCII) UI for diffing commits in Git in Linux.
 #
 # Author
 #     mats.lintonsson@ericsson.com
@@ -14,15 +14,13 @@
 #     - Document how the configuration file works.
 #     - Clean TODOs.
 #
-# Dreaming:
-#     - Create a (G)UI for easy viewing and selecting commits.
-#
 # History
 #     2014-12-01  ervmali  First version.
 #     2014-12-02  ervmali  Introduced the UNCOMMITTED functionality.
 #     2014-12-03  ervmali  Added the configuration file functionality.
 #     2014-12-09  ervmali  Bug fixes.
 #     2015-01-12  ervmali  Added a simple UI for picking commits to diff.
+#     2015-01-13  ervmali  Updated the printHelp sub.
 #
 ################################################################################
 
@@ -46,7 +44,10 @@ use strict;
 # ------------------------------------------------------------------------------
 sub printHelp
 {
-  print("\nUsage:\n\n");
+  print("\ngit_diff.pl\n");
+  print("  Provides a simple (ASCII) UI for diffing commits in Git in Linux.\n\n");
+
+  print("Usage:\n\n");
 
   print("  Variant one:\n");
   print("    git_diff.pl <commitRef> <commitSec>\n\n");
@@ -56,6 +57,9 @@ sub printHelp
 
   print("  Variant three:\n");
   print("    git_diff.pl UNCOMMITTED <commitSec>\n\n");
+
+  print("  Variant four:\n");
+  print("    git_diff.pl GRAPH\n\n");
 
   print("  Where <commitRef> is the SHA-1 (or the beginning of it) of the\n");
   print("  reference commit, i.e. the commit containing the changes that will\n");
@@ -68,6 +72,21 @@ sub printHelp
   print("  Use the word UNCOMMITTED as a substitution for <commitRef>. The\n");
   print("  uncommitted modifications (excluding untracked files) will then\n");
   print("  be used instead of a real commit.\n\n");
+
+  print("  If GRAPH is used, a simple (ASCII) UI is started. A commit tree\n");
+  print("  is shown. Use the UI to select a reference commit and a secondary\n");
+  print("  commit. The following keys are valid for navigation within the UI:\n\n");
+
+  print("    k = Moves arrow (to the left of the screen) up.\n");
+  print("    j = Moves arrow (to the left of the screen) down.\n");
+  print("    K = Paging up ten lines.\n");
+  print("    J = Paging down ten lines.\n");
+  print("    r = Sets the reference commit at the commit next to the arrow.\n");
+  print("        Indicated in the UI by an 'R' on the left side of the screen.\n");
+  print("    s = Sets the secondary commit at the commit next to the arrow.\n");
+  print("        Indicated in the UI by a 'S' on the left side of the screen.\n");
+  print("    d = Starts the diffing.\n");
+  print("    q = Quits the UI/script.\n\n");
 }
 
 # ------------------------------------------------------------------------------
