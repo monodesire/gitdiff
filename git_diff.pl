@@ -21,6 +21,7 @@
 #     2014-12-09  ervmali  Bug fixes.
 #     2015-01-12  ervmali  Added a simple UI for picking commits to diff.
 #     2015-01-13  ervmali  Updated the printHelp sub.
+#     2015-01-14  ervmali  Now possible to select uncommitted changes in the UI.
 #
 ################################################################################
 
@@ -264,7 +265,20 @@ if($numOfArgs == 1)
 
     while($loop == 1)  # loop until user breaks
     {
-      @logLines = getGitCommits($offset, $numAvailableLines);
+      @logLines = ();
+
+      my $uncommittedChanges = 0;
+      if($offset == 0 and `git status --porcelain | awk '{if (\$1 == "M") print \$2}'` ne "")  # check if there are any uncommitted changes in the repo
+      {
+        $uncommittedChanges = 1;
+      }
+
+      @logLines = getGitCommits($offset, $numAvailableLines - ($uncommittedChanges == 1 ? 1 : 0));  # fetch commits from the Git logs
+
+      if($uncommittedChanges == 1)
+      {
+        unshift(@logLines, "* UNCOMMITTED CHANGES");  # add a uncommitted "commit" tag as the first "commit" in the list of commits
+      }
 
       my $currentLine = 0;
       foreach my $oneLogLine (@logLines)  # print a set of commits
@@ -272,7 +286,7 @@ if($numOfArgs == 1)
         $oneLogLine = trimString($oneLogLine);
         $screen->at($currentLine,3)->puts(substr($oneLogLine, 0, $cols - 7));  # print one line
 
-        if($commitRef ne "" and $oneLogLine =~ /\*\s${commitRef}\s\(/)  # print 'R' if this commit has been marked as the reference commit
+        if($commitRef ne "" and ($oneLogLine =~ /\*\s${commitRef}\s\(/ or ($oneLogLine =~ /\*\sUNCOMMITTED CHANGES/ and $commitRef eq "UNCOMMITTED")))  # print 'R' if this commit has been marked as the reference commit
         {
           $screen->at($currentLine,1)->puts("R");
         }
@@ -356,7 +370,7 @@ if($numOfArgs == 1)
       }
       elsif($key eq "r")
       {
-        if($logLines[$arrow] =~ /\*\s([0-9a-z]{7})\s\(/)  # make sure the arrow line contains a commit
+        if($logLines[$arrow] =~ /\*\s([0-9a-z]{7})\s\(/ or $logLines[$arrow] =~ /\*\s(UNCOMMITTED) CHANGES/)  # make sure the arrow line contains a commit
         {
           my $commitTemp = $1;
 
