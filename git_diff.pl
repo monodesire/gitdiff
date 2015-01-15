@@ -10,8 +10,9 @@
 #
 # Todo (highest prio in top, roughly):
 #     - Make it possible to use HEAD for commitSec.
-#     - Introduce command 'n' (next) for auto-jumping to the next file.
 #     - Document how the configuration file works.
+#     - Show branches and tags in the UI?
+#     - Add search abilities in the UI?
 #     - Clean TODOs.
 #
 # History
@@ -22,6 +23,7 @@
 #     2015-01-12  ervmali  Added a simple UI for picking commits to diff.
 #     2015-01-13  ervmali  Updated the printHelp sub.
 #     2015-01-14  ervmali  Now possible to select uncommitted changes in the UI.
+#     2015-01-15  ervmali  Added the next ('n') jump functionality.
 #
 ################################################################################
 
@@ -48,7 +50,7 @@ sub printHelp
   print("\ngit_diff.pl\n");
   print("  Provides a simple (ASCII) UI for diffing commits in Git in Linux.\n\n");
 
-  print("Usage:\n\n");
+  print("Usage:\n");
 
   print("  Variant one:\n");
   print("    git_diff.pl <commitRef> <commitSec>\n\n");
@@ -499,6 +501,7 @@ if(scalar(@commitRefFiles) == 0)
 # main loop where user is presented with files that can be diffed and he/she makes a choice
 
 my $loop = 1;
+my $nextFileToDiff = 0;
 my $stdin;
 
 while($loop == 1)
@@ -507,23 +510,40 @@ while($loop == 1)
 
   my $file;
   my $i = 0;
+  my $marker;
   foreach $file (@commitRefFiles)
   {
     $file = trimString($file);
-    print("($i) ${file}\n");
+
+    $marker = "";
+    if($i == $nextFileToDiff)
+    {
+      $marker = "*";  # indicates the next commit (for the 'n' usage)
+    }
+
+    print("(${i}${marker}) ${file}\n");
     $i++;
   }
 
   # wait for user input
 
-  print( "\nPick a number (or use q to exit)? " );
+  print("\nOptions:" );
+  print("\n  - (number) : Pick a diff.");
+  print("\n  - n        : Pick next diff. Indicated by a star.");
+  print("\n  - q        : Quit script.");
+  print("\nAction? ");
 
   $stdin = <STDIN>;
   $stdin = trimString($stdin);
 
   # examine the user input
 
-  if( $stdin =~ /^q$/ )  # q (quit)
+  if( $stdin =~ /^n$/ )  # n (next)
+  {
+      $stdin = $nextFileToDiff;
+      goto DIFF;
+  }
+  elsif( $stdin =~ /^q$/ )  # q (quit)
   {
       $loop = 0;
   }
@@ -533,6 +553,17 @@ while($loop == 1)
 
     if($stdin >= 0 and $stdin <= scalar(@commitRefFiles)-1)
     {
+      $nextFileToDiff = $stdin;
+
+      DIFF:
+
+      $nextFileToDiff++;
+
+      if($nextFileToDiff > (scalar(@commitRefFiles) - 1))
+      {
+        $nextFileToDiff = 0;
+      }
+
       my $diffToolTemp = $diffTool;
 
       # find out the name of the chosen file
