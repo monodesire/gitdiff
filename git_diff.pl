@@ -13,7 +13,9 @@
 #     - Document how the configuration file works.
 #     - Show branches and tags in the UI?
 #     - Add search abilities in the UI?
+#     - Make UI more robust (seems to be scrolling problems, or?).
 #     - Clean TODOs.
+#     - Add examples to the help text.
 #
 # History
 #     2014-12-01  ervmali  First version.
@@ -24,6 +26,7 @@
 #     2015-01-13  ervmali  Updated the printHelp sub.
 #     2015-01-14  ervmali  Now possible to select uncommitted changes in the UI.
 #     2015-01-15  ervmali  Added the next ('n') jump functionality.
+#     2015-02-18  ervmali  Added new parameter: --diff-all
 #
 ################################################################################
 
@@ -47,49 +50,63 @@ use strict;
 # ------------------------------------------------------------------------------
 sub printHelp
 {
-  print("\ngit_diff.pl\n");
-  print("  Provides a simple (ASCII) UI for diffing commits in Git in Linux.\n\n");
+  print("\ngit_diff.pl\n\n");
+  print("  Provides a simple interface for diffing commits in Git in Linux.\n\n");
 
-  print("Usage:\n");
+  print("Usage:\n\n");
 
   print("  Variant one:\n");
-  print("    git_diff.pl <commitRef> <commitSec>\n\n");
+  print("    git_diff.pl <commitRef> <commitSec> [--diff-all]\n\n");
 
   print("  Variant two:\n");
-  print("    git_diff.pl HEAD <commitSec>\n\n");
+  print("    git_diff.pl HEAD <commitSec> [--diff-all]\n\n");
 
   print("  Variant three:\n");
-  print("    git_diff.pl UNCOMMITTED <commitSec>\n\n");
+  print("    git_diff.pl UNCOMMITTED <commitSec> [--diff-all]\n\n");
 
   print("  Variant four:\n");
-  print("    git_diff.pl GRAPH\n\n");
+  print("    git_diff.pl --graph\n\n");
 
-  print("  Where <commitRef> is the SHA-1 (or the beginning of it) of the\n");
-  print("  reference commit, i.e. the commit containing the changes that will\n");
-  print("  be subject for diff against <commitSec>.\n\n");
+  print("Details:\n\n");
 
-  print("  Use the word HEAD as a substitution for <commitRef>. The commit is\n");
-  print("  then fetched automatically, taking the commit where HEAD is\n");
-  print("  located.\n\n");
+  print("  <commitRef> and <commitSec> represent commits given by their respective SHA-1s\n");
+  print("  (partly or in their entirety).\n\n");
 
-  print("  Use the word UNCOMMITTED as a substitution for <commitRef>. The\n");
-  print("  uncommitted modifications (excluding untracked files) will then\n");
-  print("  be used instead of a real commit.\n\n");
+  print("  <commitRef> is the so called reference commit, i.e. the commit containing the\n");
+  print("  modifications that will be subject for diffing against.\n\n");
 
-  print("  If GRAPH is used, a simple (ASCII) UI is started. A commit tree\n");
-  print("  is shown. Use the UI to select a reference commit and a secondary\n");
-  print("  commit. The following keys are valid for navigation within the UI:\n\n");
+  print("  <commitSec> is the so called secondary commit, i.e. the commit that will diff\n");
+  print("  against the modifications in <commitRef>.\n\n");
+
+  print("  Special labels:\n\n");
+
+  print("    HEAD:        May be used as a substitution for <commitRef>. The SHA-1 is\n");
+  print("                 fetched automatically, taking the commit where HEAD currently\n");
+  print("                 is located.\n\n");
+
+  print("    UNCOMMITTED: May be used as a substitution for <commitRef>. The uncommitted\n");
+  print("                 modifications (excluding untracked files) will then be used\n");
+  print("                 instead of a real commit.\n\n");
+
+  print("  If --graph is used, a simple (ASCII) UI is started. A commit tree is shown.\n");
+  print("  Use the UI to select a reference commit and a secondary commit. The following\n");
+  print("  keys are valid for navigation within the UI:\n\n");
 
   print("    k = Moves arrow (to the left of the screen) up.\n");
   print("    j = Moves arrow (to the left of the screen) down.\n");
   print("    K = Paging up ten lines.\n");
   print("    J = Paging down ten lines.\n");
-  print("    r = Sets the reference commit at the commit next to the arrow.\n");
-  print("        Indicated in the UI by an 'R' on the left side of the screen.\n");
-  print("    s = Sets the secondary commit at the commit next to the arrow.\n");
-  print("        Indicated in the UI by a 'S' on the left side of the screen.\n");
+  print("    r = Sets the reference commit at the commit next to the arrow. Indicated in\n");
+  print("        the UI by an 'R' on the left side of the screen.\n");
+  print("    s = Sets the secondary commit at the commit next to the arrow. Indicated in\n");
+  print("        the UI by a 'S' on the left side of the screen.\n");
   print("    d = Starts the diffing.\n");
+  print("    D = Same as d, but invoking the --diff-all functionality (see below).\n");
   print("    q = Quits the UI/script.\n\n");
+
+  print("  If the optional parameter --diff-all is used, not only modifications from the\n");
+  print("  <commitRef> is brought into the diff, but also all modifications between the\n");
+  print("  <commitRef> and <commitSec> (excl. modifications in <commitSec> itself).\n\n");
 }
 
 # ------------------------------------------------------------------------------
@@ -190,6 +207,7 @@ print("\n");
 my $commitRef = "";  # reference commit
 my $commitSec = "";  # secondary commit
 my @commitRefFiles;  # a list of all modified files found in $commitRef
+my $diffAllFilesBetweenTwoCommits = 0;
 
 my $repoRoot = `git rev-parse --show-toplevel`;  # Git repository root directory  # TODO: Add fault handling for this operation.
 $repoRoot = trimString($repoRoot);
@@ -239,7 +257,7 @@ my $numOfArgs = scalar(@ARGV);
 
 if($numOfArgs == 1)
 {
-  if($ARGV[0] =~ /^GRAPH$/)
+  if($ARGV[0] =~ /^--graph$/)
   {
     # get terminal size
 
@@ -312,7 +330,7 @@ if($numOfArgs == 1)
       }
 
       $currentLine++;
-      $screen->at($currentLine,0)->puts("Legend: [k=up] [j=down] [K=pgUp] [J=pgDown] [r=ref] [s=sec] [d=diff] [q=quit]");
+      $screen->at($currentLine,0)->puts("Legend: [k=up] [j=down] [K=pgUp] [J=pgDown] [r=ref] [s=sec] [d/D=diff] [q=quit]");
 
       WAIT_FOR_USER_INPUT:
 
@@ -410,6 +428,11 @@ if($numOfArgs == 1)
       {
         $loop = 0;
       }
+      elsif($key eq "D")
+      {
+        $loop = 0;
+        $diffAllFilesBetweenTwoCommits = 1;
+      }
       else  # user pressed an unsupported key
       {
         goto WAIT_FOR_USER_INPUT;  # bypass reprint of all commits
@@ -432,7 +455,7 @@ if($numOfArgs == 1)
     exit(1);
   }
 }
-elsif($numOfArgs == 2)
+elsif($numOfArgs == 2 or $numOfArgs == 3)
 {
   if($ARGV[0] =~ /^HEAD$/)
   {
@@ -448,6 +471,27 @@ elsif($numOfArgs == 2)
   }
 
   $commitSec = $ARGV[1];
+
+  if($commitSec =~ /HEAD/)
+  {
+      print("ERROR! Cannot use the HEAD word for the secondary commit.\n");
+      printHelp();
+      exit(1);
+  }
+
+  if($numOfArgs == 3)
+  {
+    if($ARGV[2] =~ /^--diff-all$/)
+    {
+      $diffAllFilesBetweenTwoCommits = 1;
+    }
+    else
+    {
+      print("ERROR! Can't recognize $ARGV[2] as an argument.\n");
+      printHelp();
+      exit(1);
+    }
+  }
 }
 else
 {
@@ -481,16 +525,51 @@ if(not `git cat-file -t ${commitSec} 2>/dev/null` =~ /commit/)
   exit(1);
 }
 
-# get files that have been modified in reference commit
+# check that reference and secondary commit are not the same
+
+if($commitRef =~ /^${commitSec}/)
+{
+  print("ERROR! The two given commits have the same SHA-1 (${commitRef}). Nothing to diff.\n\n");
+  exit(1);
+}
+
+# get files that have been modified in reference commit (and possibly all files therebetween)
 
 if($commitRef eq "UNCOMMITTED")
 {
   @commitRefFiles = `git status --porcelain | awk '{if (\$1 == "M") print \$2}'`;
+
+  if($diffAllFilesBetweenTwoCommits == 1)  # get a list of files modified between the reference commit (emulated to HEAD) and the secondary commit (incl. the secondary commit)
+  {
+    my $commitHead = `git rev-parse HEAD`;
+    $commitHead = trimString($commitHead);
+
+    my @allFilesBetweenTwoCommits = `git diff --name-only ${commitHead} ${commitSec}`;
+    @commitRefFiles = (@commitRefFiles, @allFilesBetweenTwoCommits);
+  }
 }
 else
 {
-  @commitRefFiles = `git diff-tree --no-commit-id --name-only -r ${commitRef}`;
+  @commitRefFiles = `git diff-tree --no-commit-id --name-only -r ${commitRef}`;  # get a list of files modified in the reference commit
+
+  if($diffAllFilesBetweenTwoCommits == 1)  # get a list of files modified between the reference commit and the secondary commit (incl. the secondary commit)
+  {
+    my @allFilesBetweenTwoCommits = `git diff --name-only ${commitRef} ${commitSec}`;
+    @commitRefFiles = (@commitRefFiles, @allFilesBetweenTwoCommits);
+  }
 }
+
+# remove unwanted white spaces from the entries in the list of files
+
+foreach my $file (@commitRefFiles)
+{
+  $file = trimString($file);
+}
+
+# remove any duplicates in the list of files to diff and check that the list is not empty
+
+my %tempHash = map { $_, 1 } @commitRefFiles;
+@commitRefFiles = keys %tempHash;
 
 if(scalar(@commitRefFiles) == 0)
 {
@@ -513,8 +592,6 @@ while($loop == 1)
   my $marker;
   foreach $file (@commitRefFiles)
   {
-    $file = trimString($file);
-
     $marker = "";
     if($i == $nextFileToDiff)
     {
